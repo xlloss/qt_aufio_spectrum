@@ -71,11 +71,16 @@
 #define DUMP_DATA
 #endif
 
+#define RECORD_FILE  "/home/slash/record_file.wav"
+
 class FrequencySpectrum;
 QT_BEGIN_NAMESPACE
 class QAudioInput;
 class QAudioOutput;
 QT_END_NAMESPACE
+class QAudioRecorder;
+class QAudioProbe;
+class QAudioBuffer;
 
 /**
  * This class interfaces with the Qt Multimedia audio classes, and also with
@@ -86,6 +91,10 @@ QT_END_NAMESPACE
 class Engine : public QObject
 {
     Q_OBJECT
+
+private:
+    QAudioRecorder *m_audioRecorder;
+    QAudioProbe *m_audio_probe;
 
 public:
     explicit Engine(QObject *parent = 0);

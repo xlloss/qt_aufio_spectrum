@@ -127,7 +127,8 @@ void MainWidget::stateChanged(QAudio::Mode mode, QAudio::State state)
 
 void MainWidget::formatChanged(const QAudioFormat &format)
 {
-   infoMessage(formatToString(format), NullMessageTimeout);
+    infoMessage(formatToString(format).append(QString(" File: ").append(RECORD_FILE)),
+    NullMessageTimeout);
 
 #ifndef DISABLE_WAVEFORM
     if (QAudioFormat() != format) {
@@ -256,7 +257,7 @@ void MainWidget::createUi()
     QVBoxLayout *windowLayout = new QVBoxLayout(this);
 
     m_infoMessage->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    m_infoMessage->setAlignment(Qt::AlignHCenter);
+    m_infoMessage->setAlignment(Qt::AlignLeft);
     windowLayout->addWidget(m_infoMessage);
 
 #ifdef SUPERIMPOSE_PROGRESS_ON_WAVEFORM

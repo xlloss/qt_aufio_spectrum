@@ -62,6 +62,12 @@
 #include <QMetaObject>
 #include <QSet>
 #include <QThread>
+#include <QAudioRecorder>
+#include <QAudioProbe>
+#include <QUrl>
+
+#define FORCE_SAMPLE_RATE 44100
+#define FORCE_CHANNEL 2
 
 //-----------------------------------------------------------------------------
 // Constants
@@ -113,6 +119,10 @@ Engine::Engine(QObject *parent)
                     this,
                     SLOT(spectrumChanged(FrequencySpectrum)));
 
+    m_audioRecorder = new QAudioRecorder(this);
+    m_audio_probe = new QAudioProbe;
+    m_audio_probe->setSource(m_audioRecorder);
+
     initialize();
 
 #ifdef DUMP_DATA
@@ -126,7 +136,8 @@ Engine::Engine(QObject *parent)
 
 Engine::~Engine()
 {
-
+    delete m_audioRecorder;
+    delete m_audio_probe;
 }
 
 //-----------------------------------------------------------------------------
@@ -215,8 +226,15 @@ void Engine::setWindowFunction(WindowFunction type)
 void Engine::startRecording()
 {
     if (m_audioInput) {
+        if (m_audioRecorder->state() == QMediaRecorder::StoppedState) {
+            m_audioRecorder->setOutputLocation(QUrl::fromLocalFile(RECORD_FILE));
+            m_audioRecorder->setAudioInput("default");
+            m_audioRecorder->record();
+        }
+
         if (QAudio::AudioInput == m_mode &&
             QAudio::SuspendedState == m_state) {
+            m_audioRecorder->record();
             m_audioInput->resume();
         } else {
             m_spectrumAnalyser.cancelCalculation();
@@ -284,6 +302,7 @@ void Engine::suspend()
         QAudio::IdleState == m_state) {
         switch (m_mode) {
         case QAudio::AudioInput:
+            m_audioRecorder->pause();
             m_audioInput->suspend();
             break;
         case QAudio::AudioOutput:
@@ -553,6 +572,7 @@ bool Engine::selectFormat()
         sampleRatesList = sampleRatesList.toSet().toList(); // remove duplicates
         qSort(sampleRatesList);
         ENGINE_DEBUG << "Engine::initialize frequenciesList" << sampleRatesList;
+        qDebug() << "Engine::initialize frequenciesList" << sampleRatesList;
 
         QList<int> channelsList;
         channelsList += m_audioInputDevice.supportedChannelCounts();
@@ -560,6 +580,7 @@ bool Engine::selectFormat()
         channelsList = channelsList.toSet().toList();
         qSort(channelsList);
         ENGINE_DEBUG << "Engine::initialize channelsList" << channelsList;
+        qDebug() << "Engine::initialize channelsList" << channelsList;
 
         QAudioFormat format;
         format.setByteOrder(QAudioFormat::LittleEndian);
@@ -567,6 +588,30 @@ bool Engine::selectFormat()
         format.setSampleSize(16);
         format.setSampleType(QAudioFormat::SignedInt);
         int sampleRate, channels;
+
+        /*
+         *  use force sample rate and channel
+         *  if system can't use foce setting,
+         *  we will continure to fit good slect
+         */
+        sampleRate = FORCE_SAMPLE_RATE;
+        channels = FORCE_CHANNEL;
+        format.setChannelCount(channels);
+        format.setSampleRate(sampleRate);
+
+        const bool input_fmt_support = m_generateTone ||
+                    m_audioInputDevice.isFormatSupported(format);
+        const bool output_fmt_support = m_audioOutputDevice.isFormatSupported(format);
+
+        if (input_fmt_support && output_fmt_support) {
+            foundSupportedFormat = true;
+            qDebug() << "Engine::initialize checking " << format
+                         << "input" << input_fmt_support
+                         << "output" << output_fmt_support;
+
+            goto set_device_fmt;
+        }
+
         foreach (sampleRate, sampleRatesList) {
             if (foundSupportedFormat)
                 break;
@@ -589,6 +634,7 @@ bool Engine::selectFormat()
         if (!foundSupportedFormat)
             format = QAudioFormat();
 
+set_device_fmt:
         setFormat(format);
     }
 
@@ -598,6 +644,7 @@ bool Engine::selectFormat()
 void Engine::stopRecording()
 {
     if (m_audioInput) {
+        m_audioRecorder->stop();
         m_audioInput->stop();
         QCoreApplication::instance()->processEvents();
         m_audioInput->disconnect();
